@@ -49,7 +49,9 @@
               {{ standartTicket }}
             </span>
           </div>
-          <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+          <div v-if="warning" class="text-sm text-red-600">
+            Такой тикер уже добавлен
+          </div>
         </div>
       </div>
       <button
@@ -94,11 +96,73 @@
         Добавить
       </button>
     </section>
+    <div class="paggination">
+      <div class="btns">
+        <button
+          v-if="page > 1"
+          @click="page = page - 1"
+          class="
+            my-4
+            inline-flex
+            items-center
+            py-2
+            px-4
+            border border-transparent
+            shadow-sm
+            text-sm
+            leading-4
+            font-medium
+            rounded-full
+            text-white
+            bg-gray-600
+            hover:bg-gray-700
+            transition-colors
+            duration-300
+            focus:outline-none
+            focus:ring-2
+            focus:ring-offset-2
+            focus:ring-gray-500
+          "
+        >
+          Назад</button
+        ><button
+          @click="page = page + 1"
+          v-if="hasNextPage"
+          class="
+            my-4
+            inline-flex
+            items-center
+            py-2
+            px-4
+            border border-transparent
+            shadow-sm
+            text-sm
+            leading-4
+            font-medium
+            rounded-full
+            text-white
+            bg-gray-600
+            hover:bg-gray-700
+            transition-colors
+            duration-300
+            focus:outline-none
+            focus:ring-2
+            focus:ring-offset-2
+            focus:ring-gray-500
+          "
+        >
+          Вперед
+        </button>
+      </div>
+      <div class="filter">
+        <p>Фильтр: <input type="text" v-model="filter" /></p>
+      </div>
+    </div>
     <template v-if="tickets.length">
       <hr class="w-full border-t border-gray-600 my-4" />
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div
-          v-for="t in tickets"
+          v-for="t in filteredTickers()"
           :key="t.name"
           @click="setGraph(t)"
           :class="{
@@ -225,11 +289,23 @@ export default {
       graph: null,
       priceOnGraph: [],
       mainData: {},
+      page: 1,
+      filter: "",
+      hasNextPage: true,
+      warning: false,
     };
   },
   methods: {
+    filteredTickers() {
+      let start = (this.page - 1) * 6;
+      let end = this.page * 6;
+      const filteredList = this.tickets.filter((el) =>
+        el.name.includes(this.filter)
+      );
+      this.hasNextPage = filteredList.length > end;
+      return filteredList.slice(start, end);
+    },
     seemsTickers() {
-      console.log(this.mainData);
       const seemsT = [];
       for (let ticker in this.mainData) {
         if (ticker.toLowerCase().includes(this.ticket)) {
@@ -240,12 +316,16 @@ export default {
       return seemsT;
     },
     addStandart(t) {
+      this.warning = false;
       const currentStandartTicket = { name: t, price: "-" };
       this.tickets.push(currentStandartTicket);
       localStorage.setItem("criptonomicon-list", JSON.stringify(this.tickets));
       this.fetchTicket(currentStandartTicket.name);
+      this.ticket = "";
     },
     add() {
+      console.log(this.seemsTickers());
+      this.warning = false;
       const currentTicket = { name: this.ticket, value: "-" };
       this.tickets.push(currentTicket);
       localStorage.setItem("criptonomicon-list", JSON.stringify(this.tickets));
@@ -253,13 +333,14 @@ export default {
       this.ticket = "";
     },
     fetchTicket(name) {
+      console.log(this.tickets);
       setInterval(async () => {
         const res = await fetch(
           `https://min-api.cryptocompare.com/data/price?fsym=${name}&tsyms=USD`
         );
         const data = await res.json();
         this.tickets.find((el) => el.name === name).value =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD;
         if (this.graph?.name === name) this.priceOnGraph.push(data.USD);
       }, 3000);
     },
