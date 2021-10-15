@@ -320,10 +320,15 @@ export default {
     },
   },
   methods: {
-    updatePrice(tickerName, price) {
+    updatePrice(tickerName, newPrice) {
       this.tickers
         .filter((ticker_obj) => ticker_obj.name === tickerName)
-        .forEach((ticker_obj) => (ticker_obj.price = price));
+        .forEach((ticker_obj) => {
+          if (ticker_obj === this.selected) {
+            this.graph.push(newPrice);
+          }
+          ticker_obj.price = newPrice;
+        });
     },
     formatPrice(price) {
       if (price === "-") return price;
