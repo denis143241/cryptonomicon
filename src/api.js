@@ -1,39 +1,72 @@
 const API_KEY =
-  "ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e";
+  "6bd25f7512b175ef720f2f0a7dca050b1d92704f4d70fc3bb1960f2d1b785032";
 
-const tickersHandlers = new Map();
+const tickersHandlers = new Map(); // {BTC: cb(price)...,} cb - реактивно меняет данные во App.vue компоненте отсюда нам достаточно вызвать cb и передать в него newPrice
+const socket = new WebSocket(
+  `wss://streamer.cryptocompare.com/v2?api_key=${API_KEY}`
+);
+const AGGREGATE_INDEX = "5";
 
-const loadTickers = () => {
-  if (tickersHandlers.size === 0) {
+// Ожидает ответа от Websocket затем вызывает колбэк нужного тикера
+socket.addEventListener("message", (e) => {
+  const {
+    TYPE: type,
+    FROMSYMBOL: currency,
+    PRICE: newPrice,
+  } = JSON.parse(e.data);
+
+  if (type !== AGGREGATE_INDEX || newPrice === undefined) {
     return;
   }
 
-  fetch(
-    `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${[
-      ...tickersHandlers.keys(),
-    ].join(",")}&tsyms=USD&api_key=${API_KEY}`
-  )
-    .then((r) => r.json())
-    .then((rawData) => {
-      const updateData = Object.fromEntries(
-        Object.entries(rawData).map(([key, value]) => [key, value.USD])
-      );
-      Object.entries(updateData).map(([key, newPrice]) => {
-        const handlers = tickersHandlers.get(key) ?? [];
-        handlers.forEach((fn) => fn(newPrice));
-      });
-    });
-};
+  const handlers = tickersHandlers.get(currency) ?? [];
+  handlers.forEach((fn) => fn(newPrice));
+});
 
+// Добавление cb в Map. Пример - {'BTC': fn1, fn2, fn3, cb} или создание такого ключа и доабвление в него первого cb
 export const subscribeToTicker = (ticker, cb) => {
   const subscribers = tickersHandlers.get(ticker) || [];
   tickersHandlers.set(ticker, [...subscribers, cb]);
+  subscribeToTickerOnWS(ticker);
 };
 
+// Удаление тикера из Map
 export const unsubscribeFromTicker = (ticker) => {
   tickersHandlers.delete(ticker);
+  unSubscribeToTickerOnWS(ticker);
 };
 
-setInterval(loadTickers, 5000);
+// Сообщение для отписки от Websocket
+function unSubscribeToTickerOnWS(ticker) {
+  sendToWebSocket({
+    action: "SubRemove",
+    subs: [`5~CCCAGG~${ticker}~USD`],
+  });
+}
 
-window.tickers = tickersHandlers;
+// Сообщение для подписки на обновления на Websocket
+function subscribeToTickerOnWS(ticker) {
+  sendToWebSocket({
+    action: "SubAdd",
+    subs: [`5~CCCAGG~${ticker}~USD`],
+  });
+}
+
+// Устанавливает соединение с WebSocket
+function sendToWebSocket(massage) {
+  const stringifyedMessage = JSON.stringify(massage);
+
+  if (socket.readyState === socket.OPEN) {
+    socket.send(stringifyedMessage);
+    return;
+  }
+
+  socket.addEventListener(
+    "open",
+    () => {
+      socket.send(stringifyedMessage);
+    },
+    { once: true }
+  );
+}
+
